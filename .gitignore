@@ -316,3 +316,12 @@ ipython_config.py
 
 !/_navigable_small_world_graph.so
 !/build/
+!/_navigable_small_world_graph.so
+/.idea/sources.iml
+/.idea/vcs.xml
+/_navigable_small_world_graph.so
+/.idea/misc.xml
+/.idea/modules.xml
+/.idea/inspectionProfiles/profiles_settings.xml
+/.idea/inspectionProfiles/Project_Default.xml
+/_navigable_small_world_graph.cpp
