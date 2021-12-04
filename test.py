@@ -7,6 +7,7 @@ import numpy as np
 from sklearn.neighbors import NearestNeighbors
 import os
 import psutil
+from product_quantization import PQ
 
 def get_process_memory():
     process = psutil.Process(os.getpid())
@@ -104,6 +105,28 @@ def test_index(method: str, data, query, k=100, params=None, space='l2'):
         start = time.time()
         approximated_neigbours = None
         D, approximated_neigbours = index.query(query, k=k)
+        end = time.time()
+        mem_after = get_process_memory()
+        result['search-time'] = round(end - start, 3)
+        result['search-memory'] = format_bytes(mem_after - mem_before, calc='search')
+        result['recall'] = calculate_recall(approximated_neigbours, corrects, query.shape[0], True)
+    elif method == 'PQ':
+        n_subvectors = params['n_subvectors'] if params else 4
+        n_bits_per_vector = params['n_bits'] if params else 8
+        save_flag = params['save'] if params else False
+        flag_lookup =  params['lookup'] if params else False
+        mem_before = get_process_memory()
+        start = time.time()
+        pq = PQ(n_subvectors=n_subvectors,  n_bits_per_vector=n_bits_per_vector)
+        pq.compress(train_data=data, to_save=save_flag)
+        end = time.time()
+        mem_after = get_process_memory()
+        result['construction-time'] = round(end - start, 3)
+        result['construction-memory'] = format_bytes(mem_after - mem_before, calc='construction')
+
+        mem_before = get_process_memory()
+        start = time.time()
+        approximated_neigbours = pq.predict(query, nearest_neighbors=k, using_lookup=flag_lookup)
         end = time.time()
         mem_after = get_process_memory()
         result['search-time'] = round(end - start, 3)
