@@ -325,3 +325,4 @@ ipython_config.py
 /.idea/inspectionProfiles/profiles_settings.xml
 /.idea/inspectionProfiles/Project_Default.xml
 /_navigable_small_world_graph.cpp
+!/index.pickle
