@@ -8,7 +8,7 @@ libs_path='-I/usr/local/Cellar/python@3.9/3.9.7/Frameworks/Python.framework/Vers
 setup(
     ext_modules=cythonize('_navigable_small_world_graph.pyx',
                           compiler_directives={'language_level':"3"},
-                          include_path = [libs_path]),
+                          include_path=[libs_path]),
 )
 
 """

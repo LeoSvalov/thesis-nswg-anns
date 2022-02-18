@@ -46,14 +46,20 @@ def test_index(method: str, data, query, k=100, params=None, space='l2'):
     if method == 'NSWG':
         reg = None
         attempts = 1
+        guard_hops = 100
+        quantize = False
+        levels = 20
         if params:
             reg = params['regularity']
-            # attempts = params['attempts']
+            attempts = params['attempts']
             guard_hops = params['guard_hops']
+            quantize = params['quantize']
+            levels = params['quantization_levels']
+
         mem_before = get_process_memory()
         start = time.time()
         index = NSWGraph(n_nodes=len(data), dimensions=len(data[0]), reg=reg, guard_hops=guard_hops)
-        index.build_navigable_graph(data, attempts=attempts)
+        index.build_navigable_graph(data, attempts=attempts, quantize=quantize, quantization_levels=levels)
         end = time.time()
         mem_after = get_process_memory()
         result['construction-time'] = round(end - start, 3)

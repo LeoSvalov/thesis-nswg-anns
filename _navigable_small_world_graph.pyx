@@ -1,19 +1,24 @@
 # distutils: language = c++
 #!python
-#cython: boundscheck=False
-#cython: wraparound=False
-#cython: cdivision=True
+# cython: boundscheck=False
+# cython: wraparound=False
+# cython: cdivision=True
 
 import random
-import numpy as np
+
+# import numpy as np
 cimport numpy as np
+np.import_array()
 from libcpp.vector cimport vector
 from libcpp.set cimport set as set_c
 from libcpp.pair cimport pair as pair
 from libc.math cimport sqrt, pow
 from libcpp.queue cimport priority_queue
 from libc.stdlib cimport rand
-
+import itertools
+from libcpp cimport bool
+import cython
+from cython import declare
 
 DTYPE = np.float64
 ITYPE = np.int64
@@ -21,15 +26,17 @@ ITYPE = np.int64
 cdef class NSWGraph:
     def __init__(self, ITYPE_t n_nodes, ITYPE_t dimensions, ITYPE_t reg=0, ITYPE_t guard_hops=100):
         self.dimension = dimensions
+
         self.number_nodes = n_nodes
         self.regularity = self.dimension//2 if reg==0 else reg
         self.guard_hops = guard_hops
+
         cdef ITYPE_t i
 
         for i in range(self.number_nodes):
             self.classes.push_back(random.randint(0, 1))
 
-    cdef priority_queue[pair[DTYPE_t, ITYPE_t]] delete_duplicate(self, priority_queue[pair[DTYPE_t, ITYPE_t]] queue) nogil:
+    cdef priority_queue[pair[DTYPE_t, ITYPE_t]] delete_duplicate(self, priority_queue[pair[DTYPE_t, ITYPE_t]] queue):# nogil:
         cdef priority_queue[pair[DTYPE_t, ITYPE_t]] new_que
         cdef set_c[ITYPE_t] tmp_set
         new_que.push(queue.top())
@@ -42,15 +49,26 @@ cdef class NSWGraph:
             queue.pop()
         return new_que
 
-    cdef DTYPE_t eucl_dist(self, vector[DTYPE_t] v1, vector[DTYPE_t] v2) nogil:
+    # todo: optimize
+    cdef DTYPE_t eucl_dist(self, vector[DTYPE_t] v1, vector[DTYPE_t] v2):
         cdef ITYPE_t i = 0
         cdef DTYPE_t res = 0
-        for i in range(v1.size()):
-            res += pow(v1[i] - v2[i], 2)
+        if self.quantize_flag:
+            for i in range(v1.size()):
+                res += self.lookup_table[int(v2[i])][int(v1[i])]
+        else:
+            for i in range(v1.size()):
+                res += pow(v1[i] - v2[i], 2)
         return res
 
-    cdef void search_nsw_basic(self, vector[DTYPE_t] query, set_c[ITYPE_t]* visitedSet, priority_queue[pair[DTYPE_t, ITYPE_t]]* candidates, priority_queue[pair[DTYPE_t, ITYPE_t]]* result, ITYPE_t* res_hops, ITYPE_t top=5, ITYPE_t guard_hops=100) nogil:
-        ''' basic algorithm, takes vector query and returns a pair (nearest_neighbours, hops)'''
+
+
+    cdef void search_nsw_basic(self, vector[DTYPE_t] query,
+                               set_c[ITYPE_t]* visitedSet,
+                               priority_queue[pair[DTYPE_t, ITYPE_t]]* candidates,
+                               priority_queue[pair[DTYPE_t, ITYPE_t]]* result,
+                               ITYPE_t* res_hops, ITYPE_t top=5,
+                               ITYPE_t guard_hops=100):# nogil:
         cdef ITYPE_t entry = rand() % self.nodes.size()
         cdef ITYPE_t hops = 0
         cdef DTYPE_t closest_dist = 0
@@ -68,26 +86,23 @@ cdef class NSWGraph:
         tmp_pair.first = tmp_pair.first * (-1)
         result[0].push(tmp_pair)
         hops = 0
+
+        # todo: optimize
         while hops < guard_hops:
             hops += 1
             if candidates[0].size() == 0:
                 break
-            # 6 get element c closest from candidates (see paper 4.2.)
-            # 7 remove c from candidates
             tmp_pair = candidates[0].top()
             candidates.pop()
             closest_dist = tmp_pair.first * (-1)
             closest_id = tmp_pair.second
-            # k-th best of global result
-            # new stop condition from paper
-            # if c is further than k-th element from result
-            # than break repeat
-            #! NB this statemrnt from paper will not allow to converge in first run.
             if result[0].size() >= top:
                 while result[0].size() > top:
                     result[0].pop()
+
                 if result[0].top().first < closest_dist:
                     break
+
             #  for every element e from friends of c do:
             for e in self.neighbors[closest_id]:
                 # 13 if e is not in visitedSet than
@@ -117,24 +132,33 @@ cdef class NSWGraph:
             result.pop()
         return res, hops
 
-    def knnQueryBatch(self,  np.ndarray queries,  ITYPE_t attempts=1, ITYPE_t top=5, ITYPE_t guard_hops=100):
+    def knnQueryBatch(self,  ATYPE_t queries,  ITYPE_t attempts=1, ITYPE_t top=5, ITYPE_t guard_hops=100):
 
         '''knn for batch of queries'''
         result = []
         cdef pair[vector[ITYPE_t], ITYPE_t] res
         for i, query in enumerate(queries):
+            if self.quantize_flag:
+                # normalized_query = self.norm.transform(query)
+                normalized_query = query
+                query = self.find_quantized_values(normalized_query)
             res = self._multi_search(query, attempts, top, guard_hops)
             result.append([res.first[::-1]])
         return result
 
-    def knnQuery(self, np.ndarray query, ITYPE_t attempts=1, ITYPE_t top=5, ITYPE_t guard_hops=100):
+    def knnQuery(self, ATYPE_t query, ITYPE_t attempts=1, ITYPE_t top=5, ITYPE_t guard_hops=100):
         '''knn for single query'''
+        if self.quantize_flag:
+            # normalized_query = self.norm.transform(query)
+            normalized_query = query
+            query = self.find_quantized_values(normalized_query)
         cdef pair[vector[ITYPE_t], ITYPE_t] res = self._multi_search(query, attempts, top, guard_hops)
         return res.first[::-1], res.second
 
-    cdef pair[vector[ITYPE_t], ITYPE_t] _multi_search(self, vector[DTYPE_t] query, ITYPE_t attempts, ITYPE_t top=5, ITYPE_t guard_hops=100) nogil:
-        '''Implementation of `K-NNSearch`, but without keeping the visitedSet'''
-        # share visitedSet among searched. Paper, 4.2.p2
+    cdef pair[vector[ITYPE_t], ITYPE_t] _multi_search(self, vector[DTYPE_t] query,
+                                                      ITYPE_t attempts,
+                                                      ITYPE_t top=5, ITYPE_t guard_hops=100):# nogil:
+
         cdef set_c[ITYPE_t] visitedSet
         cdef priority_queue[pair[DTYPE_t, ITYPE_t]] candidates
         cdef priority_queue[pair[DTYPE_t, ITYPE_t]] result
@@ -159,20 +183,43 @@ cdef class NSWGraph:
                 break
         return pair[vector[ITYPE_t], ITYPE_t](res, hops)
 
-    def vector_quantization(self, np.ndarray values):
-        return values
 
-    def build_navigable_graph(self, np.ndarray values, ITYPE_t attempts=1, bool quantize=False):
-        '''Accepts container with values. Returns list with graph nodes'''
-        if quantize:
-            cdef np.ndarray quantized_values = self.vector_quantization(values)
-            cdef vector[vector[DTYPE_t]] tmp_result = self.ndarray_to_vector_2(quantized_values)
-        else:
-            cdef vector[vector[DTYPE_t]] tmp_result = self.ndarray_to_vector_2(values)
+    cdef ATYPE_t find_quantized_values(self, ATYPE_t vector):
+      result = []
+      for i, data_value in enumerate(vector):
 
+        result.append((np.abs(self.quantization_values - data_value)).argmin())
+      return np.array(result)
+
+    cdef ATYPE_t quantize(self, ATYPE_t data, ITYPE_t quantization_levels):
+
+        self.quantization_values = np.linspace(0, 1, quantization_levels)
+
+        self.lookup_table = np.zeros(shape=(quantization_levels,quantization_levels))
+        for v in itertools.combinations(enumerate(self.quantization_values), 2):
+            i = v[0][0]
+            j = v[1][0]
+            self.lookup_table[i][j] = pow(np.abs(v[0][1]-v[1][1]),2)
+            self.lookup_table[j][i] = pow(np.abs(v[1][1]-v[0][1]),2)
+        quantized_data = []
+        for i, vector in enumerate(data):
+            quantized_data.append(self.find_quantized_values(vector))
+        return np.array(quantized_data)
+
+
+
+    def build_navigable_graph(self, ATYPE_t values, ITYPE_t attempts=2, bool quantize=False, ITYPE_t quantization_levels=20):
+        self.quantize_flag = quantize
+        if self.quantize_flag:
+            normalized_values = values
+            quantized_data = self.quantize(values, quantization_levels=quantization_levels)
+            values = quantized_data
+
+
+        cdef vector[vector[DTYPE_t]] tmp_result = self.ndarray_to_vector_2(values)
         self._build_navigable_graph(tmp_result, attempts)
 
-    cdef ITYPE_t _build_navigable_graph(self, vector[vector[DTYPE_t]] values, ITYPE_t attempts=1) nogil:
+    cdef ITYPE_t _build_navigable_graph(self, vector[vector[DTYPE_t]] values, ITYPE_t attempts=1): # nogil:
         cdef vector[DTYPE_t] val
         cdef vector[ITYPE_t] closest
         cdef ITYPE_t c
@@ -183,8 +230,7 @@ cdef class NSWGraph:
             raise Exception("Number of nodes don't match")
         if values[0].size() != self.dimension:
             raise Exception("Dimension doesn't match")
-        '''Accepts container with values. Returns list with graph nodes'''
-        # create graph with one node
+
         self.nodes.push_back(values[0])
         for i in range(self.number_nodes):
             self.neighbors.push_back(tmp_set)
