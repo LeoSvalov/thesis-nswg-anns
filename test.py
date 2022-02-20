@@ -19,14 +19,7 @@ def format_bytes(bytes, calc=None):
         return round(abs(bytes)/1e3, 2) # kB
     else: # construction
         return round(abs(bytes) / 1e6, 2)
-    # if abs(bytes) < 1000:
-    #     return str(bytes)+"B"
-    # elif abs(bytes) < 1e6:
-    #     return str(round(bytes/1e3,2)) + "kB"
-    # elif abs(bytes) < 1e9:
-    #     return str(round(bytes / 1e6, 2)) + "MB"
-    # else:
-    #     return str(round(bytes / 1e9, 2)) + "GB"
+
 
 def calculate_recall(approximated, corrects, query_qty, flag=False):
     recall = 0.0
