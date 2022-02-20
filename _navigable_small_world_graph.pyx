@@ -17,9 +17,8 @@ from libcpp.queue cimport priority_queue
 from libc.stdlib cimport rand
 import itertools
 from libcpp cimport bool
+import numpy as np
 import cython
-from cython import declare
-
 DTYPE = np.float64
 ITYPE = np.int64
 
@@ -31,6 +30,8 @@ cdef class NSWGraph:
         self.regularity = self.dimension//2 if reg==0 else reg
         self.guard_hops = guard_hops
 
+        
+        
         cdef ITYPE_t i
 
         for i in range(self.number_nodes):
