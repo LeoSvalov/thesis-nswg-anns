@@ -15,6 +15,7 @@ from libc.stdlib cimport rand
 import itertools
 from libcpp cimport bool
 import numpy as np
+from cython.parallel import prange, parallel
 DTYPE = np.float64
 ITYPE = np.int64
 
@@ -27,6 +28,7 @@ cdef class NSWGraph:
         self.guard_hops = guard_hops
 
     cdef priority_queue[pair[DTYPE_t, ITYPE_t]] delete_duplicate(self, priority_queue[pair[DTYPE_t, ITYPE_t]] queue) nogil:
+        # optimize me
         cdef priority_queue[pair[DTYPE_t, ITYPE_t]] new_que
         cdef set_c[ITYPE_t] tmp_set
         new_que.push(queue.top())
@@ -44,11 +46,12 @@ cdef class NSWGraph:
         cdef ITYPE_t i = 0
         cdef DTYPE_t res = 0
         if self.quantize_flag:
-            for i in range(v1.size()):
-                # cdef ITYPE i1 = libc.stdint.int32_t(v2[i])
-                res += self.lookup_table[int(v2[i])][int(v1[i])] # convert floats to cython ints
+            # for i in range(v1.size()):
+            for i in prange(v1.size(), nogil=True):
+                res += self.lookup_table[int(v2[i])][int(v1[i])]
         else:
-            for i in range(v1.size()):
+            # for i in range(v1.size()):
+            for i in prange(v1.size(), nogil=True):
                 res += pow(v1[i] - v2[i], 2)
         return res
 
@@ -78,8 +81,7 @@ cdef class NSWGraph:
         result[0].push(tmp_pair)
         hops = 0
 
-        # todo: optimize
-        while hops < guard_hops:
+        while hops < guard_hops: # optimize me
             hops += 1
             if candidates[0].size() == 0:
                 break
@@ -177,9 +179,9 @@ cdef class NSWGraph:
             self.search_nsw_basic(query, &visitedSet, &candidates, &result, &hops, top=top, guard_hops=guard_hops)
             result = self.delete_duplicate(result)
 
-        while result.size() > top:
+        while result.size() > top: # optimize me
             result.pop()
-        while res.size() < top:
+        while res.size() < top: # optimize me
             el = result.top().second
             res.push_back(el)
             if not result.empty():
@@ -188,7 +190,7 @@ cdef class NSWGraph:
                 break
         return pair[vector[ITYPE_t], ITYPE_t](res, hops)
 
-    cdef np.ndarray quantize(self, np.ndarray data, ITYPE_t quantization_levels):
+    cdef np.ndarray quantize(self, np.ndarray data, ITYPE_t quantization_levels): # optimize me
         self.quantization_values = np.linspace(0.0, 1.0, num=quantization_levels)
         self.lookup_table = np.zeros(shape=(quantization_levels,quantization_levels))
         for v in itertools.combinations(enumerate(self.quantization_values), 2):
@@ -224,7 +226,7 @@ cdef class NSWGraph:
             raise Exception("Dimension doesn't match")
 
         self.nodes.push_back(values[0])
-        for i in range(self.number_nodes):
+        for i in range(self.number_nodes): #???
             self.neighbors.push_back(tmp_set)
 
         for i in range(1, self.number_nodes):
@@ -239,7 +241,7 @@ cdef class NSWGraph:
                 self.neighbors[i].insert(c)
                 self.neighbors[c].insert(i)
 
-    cdef vector[vector[DTYPE_t]] ndarray_to_vector_2(self, np.ndarray array):
+    cdef vector[vector[DTYPE_t]] ndarray_to_vector_2(self, np.ndarray array): # optimize conversion in general
         cdef vector[vector[DTYPE_t]] tmp_result
         cdef ITYPE_t i
         for i in range(len(array)):
