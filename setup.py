@@ -1,5 +1,6 @@
 from setuptools import Extension
 from distutils.core import setup
+import numpy
 from Cython.Build import cythonize
 # libs_path = '/usr/local/lib/python3.9/dist-packages/numpy/core/include'
 setup(
@@ -13,5 +14,5 @@ setup(
                   nthreads=10,
                   quiet=True,
                   # annotate=True
-                  ),
+                  ),include_dirs=[numpy.get_include()],
 )
