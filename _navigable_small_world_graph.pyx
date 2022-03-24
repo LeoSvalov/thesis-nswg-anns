@@ -229,7 +229,7 @@ cdef class NSWGraph:
         for i in range(self.number_nodes): #???
             self.neighbors.push_back(tmp_set)
 
-        for i in range(1, self.number_nodes):
+        for i in range(1, self.number_nodes): # can be parallel
             val = values[i]
             closest.clear()
             # search f nearest neighbors of the current value existing in the graph
